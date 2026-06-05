@@ -3,24 +3,22 @@ import pandas as pd
 import plotly.express as px
 
 from sklearn.datasets import load_iris
-from scipy.cluster.hierarchy import linkage, dendrogram
-import matplotlib.pyplot as plt
 
-from models.hierarchical import HierarchicalClustering
+from models.pca_model import PCAModel
 
-# ---------------------------------
+# ------------------------------------
 # PAGE CONFIG
-# ---------------------------------
+# ------------------------------------
 
 st.set_page_config(
-    page_title="Hierarchical Clustering Dashboard",
-    page_icon="🌳",
+    page_title="PCA Dashboard",
+    page_icon="📉",
     layout="wide"
 )
 
-# ---------------------------------
+# ------------------------------------
 # CSS
-# ---------------------------------
+# ------------------------------------
 
 st.markdown("""
 <style>
@@ -60,24 +58,25 @@ background:#eff6ff;
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------
+# ------------------------------------
 # HEADER
-# ---------------------------------
+# ------------------------------------
 
 st.markdown("""
 <div class='main-title'>
-🌳 Hierarchical Clustering Dashboard
+📉 PCA Dashboard
 </div>
+
 <div class='sub-title'>
-Agglomerative Clustering on Iris Dataset
+Principal Component Analysis using Iris Dataset
 </div>
 """, unsafe_allow_html=True)
 
 st.divider()
 
-# ---------------------------------
-# LOAD DATA
-# ---------------------------------
+# ------------------------------------
+# LOAD DATASET
+# ------------------------------------
 
 iris = load_iris()
 
@@ -86,69 +85,71 @@ df = pd.DataFrame(
     columns=iris.feature_names
 )
 
-# ---------------------------------
+# ------------------------------------
 # SIDEBAR
-# ---------------------------------
+# ------------------------------------
 
 st.sidebar.title("⚙ Settings")
 
-clusters = st.sidebar.slider(
-    "Number of Clusters",
+components = st.sidebar.slider(
+    "Principal Components",
     2,
-    10,
-    3
+    4,
+    2
 )
 
-# ---------------------------------
+# ------------------------------------
 # MODEL
-# ---------------------------------
+# ------------------------------------
 
-model = HierarchicalClustering(clusters)
+model = PCAModel(
+    n_components=components
+)
 
 result = model.fit(df)
 
-X = result["X_scaled"]
-labels = result["labels"]
-score = result["score"]
+X_pca = result["components"]
+variance = result["variance"]
 
-df["Cluster"] = labels
-
-# ---------------------------------
-# KPI
-# ---------------------------------
+# ------------------------------------
+# KPI SECTION
+# ------------------------------------
 
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("Flowers", len(df))
-c2.metric("Features", 4)
-c3.metric("Clusters", clusters)
-c4.metric("Silhouette", round(score,3))
+c1.metric("Samples", len(df))
+c2.metric("Original Features", 4)
+c3.metric("PCA Components", components)
+c4.metric(
+    "Variance Explained",
+    f"{round(sum(variance)*100,2)}%"
+)
 
 st.divider()
 
-# ---------------------------------
+# ------------------------------------
 # TABS
-# ---------------------------------
+# ------------------------------------
 
 tab1, tab2, tab3, tab4 = st.tabs(
 [
 "Dataset",
-"Dendrogram",
-"Clusters",
+"PCA Projection",
+"Analytics",
 "Export"
 ]
 )
 
-# ---------------------------------
+# ------------------------------------
 # DATASET
-# ---------------------------------
+# ------------------------------------
 
 with tab1:
 
-    st.subheader("Dataset Preview")
+    st.subheader("Dataset")
 
     st.dataframe(
-        df.head(15),
+        df.head(),
         use_container_width=True
     )
 
@@ -159,45 +160,27 @@ with tab1:
         use_container_width=True
     )
 
-# ---------------------------------
-# DENDROGRAM
-# ---------------------------------
+# ------------------------------------
+# PCA VISUALIZATION
+# ------------------------------------
 
 with tab2:
 
-    st.subheader("Hierarchical Dendrogram")
-
-    fig, ax = plt.subplots(
-        figsize=(10,5)
+    pca_df = pd.DataFrame(
+        X_pca,
+        columns=[
+            f"PC{i+1}"
+            for i in range(components)
+        ]
     )
-
-    linked = linkage(
-        X,
-        method='ward'
-    )
-
-    dendrogram(
-        linked,
-        ax=ax
-    )
-
-    plt.title("Dendrogram")
-
-    st.pyplot(fig)
-
-# ---------------------------------
-# CLUSTERS
-# ---------------------------------
-
-with tab3:
 
     fig = px.scatter(
-        x=X[:,0],
-        y=X[:,1],
-        color=labels.astype(str),
-        title="Cluster Visualization",
-        color_discrete_sequence=
-        px.colors.qualitative.Bold
+        pca_df,
+        x="PC1",
+        y="PC2",
+        title="PCA Projection",
+        color="PC1",
+        color_continuous_scale="viridis"
     )
 
     fig.update_layout(
@@ -210,40 +193,66 @@ with tab3:
         use_container_width=True
     )
 
-    counts = (
-        df["Cluster"]
-        .value_counts()
-        .reset_index()
+# ------------------------------------
+# ANALYTICS
+# ------------------------------------
+
+with tab3:
+
+    variance_df = pd.DataFrame({
+        "Component":
+        [f"PC{i+1}" for i in range(len(variance))],
+        "Variance":
+        variance
+    })
+
+    st.subheader(
+        "Explained Variance Ratio"
     )
 
-    counts.columns = [
-        "Cluster",
-        "Count"
-    ]
-
-    pie = px.pie(
-        counts,
-        names="Cluster",
-        values="Count",
-        hole=0.5
-    )
-
-    st.plotly_chart(
-        pie,
+    st.dataframe(
+        variance_df,
         use_container_width=True
     )
 
-# ---------------------------------
+    bar = px.bar(
+        variance_df,
+        x="Component",
+        y="Variance",
+        color="Variance",
+        title="Variance Explained"
+    )
+
+    bar.update_layout(
+        template="plotly_white"
+    )
+
+    st.plotly_chart(
+        bar,
+        use_container_width=True
+    )
+
+# ------------------------------------
 # EXPORT
-# ---------------------------------
+# ------------------------------------
 
 with tab4:
 
-    csv = df.to_csv(index=False)
+    export_df = pd.DataFrame(
+        X_pca,
+        columns=[
+            f"PC{i+1}"
+            for i in range(components)
+        ]
+    )
+
+    csv = export_df.to_csv(
+        index=False
+    )
 
     st.download_button(
-        "📥 Download Dataset",
+        "📥 Download PCA Dataset",
         csv,
-        "hierarchical_clusters.csv",
+        "pca_output.csv",
         "text/csv"
     )
