@@ -3,24 +3,21 @@ import pandas as pd
 import plotly.express as px
 
 from sklearn.datasets import load_iris
-from scipy.cluster.hierarchy import linkage, dendrogram
-import matplotlib.pyplot as plt
+from models.gmm import GMMClustering
 
-from models.hierarchical import HierarchicalClustering
-
-# ---------------------------------
+# ----------------------------------
 # PAGE CONFIG
-# ---------------------------------
+# ----------------------------------
 
 st.set_page_config(
-    page_title="Hierarchical Clustering Dashboard",
-    page_icon="🌳",
+    page_title="GMM Dashboard",
+    page_icon="📈",
     layout="wide"
 )
 
-# ---------------------------------
+# ----------------------------------
 # CSS
-# ---------------------------------
+# ----------------------------------
 
 st.markdown("""
 <style>
@@ -60,24 +57,25 @@ background:#eff6ff;
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------
+# ----------------------------------
 # HEADER
-# ---------------------------------
+# ----------------------------------
 
 st.markdown("""
 <div class='main-title'>
-🌳 Hierarchical Clustering Dashboard
+📈 Gaussian Mixture Model Dashboard
 </div>
+
 <div class='sub-title'>
-Agglomerative Clustering on Iris Dataset
+Probabilistic Clustering using Iris Dataset
 </div>
 """, unsafe_allow_html=True)
 
 st.divider()
 
-# ---------------------------------
-# LOAD DATA
-# ---------------------------------
+# ----------------------------------
+# LOAD DATASET
+# ----------------------------------
 
 iris = load_iris()
 
@@ -86,62 +84,64 @@ df = pd.DataFrame(
     columns=iris.feature_names
 )
 
-# ---------------------------------
+# ----------------------------------
 # SIDEBAR
-# ---------------------------------
+# ----------------------------------
 
 st.sidebar.title("⚙ Settings")
 
-clusters = st.sidebar.slider(
-    "Number of Clusters",
+components = st.sidebar.slider(
+    "Number of Components",
     2,
     10,
     3
 )
 
-# ---------------------------------
+# ----------------------------------
 # MODEL
-# ---------------------------------
+# ----------------------------------
 
-model = HierarchicalClustering(clusters)
+model = GMMClustering(components)
 
 result = model.fit(df)
 
 X = result["X_scaled"]
 labels = result["labels"]
 score = result["score"]
+means = result["means"]
+probabilities = result["probabilities"]
 
 df["Cluster"] = labels
 
-# ---------------------------------
-# KPI
-# ---------------------------------
+# ----------------------------------
+# KPI SECTION
+# ----------------------------------
 
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("Flowers", len(df))
 c2.metric("Features", 4)
-c3.metric("Clusters", clusters)
+c3.metric("Components", components)
 c4.metric("Silhouette", round(score,3))
 
 st.divider()
 
-# ---------------------------------
+# ----------------------------------
 # TABS
-# ---------------------------------
+# ----------------------------------
 
 tab1, tab2, tab3, tab4 = st.tabs(
 [
 "Dataset",
-"Dendrogram",
 "Clusters",
+"Analytics",
 "Export"
 ]
 )
 
-# ---------------------------------
+# ----------------------------------
 # DATASET
-# ---------------------------------
+# ----------------------------------
 
 with tab1:
 
@@ -159,43 +159,17 @@ with tab1:
         use_container_width=True
     )
 
-# ---------------------------------
-# DENDROGRAM
-# ---------------------------------
+# ----------------------------------
+# CLUSTERS
+# ----------------------------------
 
 with tab2:
-
-    st.subheader("Hierarchical Dendrogram")
-
-    fig, ax = plt.subplots(
-        figsize=(10,5)
-    )
-
-    linked = linkage(
-        X,
-        method='ward'
-    )
-
-    dendrogram(
-        linked,
-        ax=ax
-    )
-
-    plt.title("Dendrogram")
-
-    st.pyplot(fig)
-
-# ---------------------------------
-# CLUSTERS
-# ---------------------------------
-
-with tab3:
 
     fig = px.scatter(
         x=X[:,0],
         y=X[:,1],
         color=labels.astype(str),
-        title="Cluster Visualization",
+        title="GMM Cluster Visualization",
         color_discrete_sequence=
         px.colors.qualitative.Bold
     )
@@ -210,22 +184,45 @@ with tab3:
         use_container_width=True
     )
 
-    counts = (
+    st.subheader("Gaussian Means")
+
+    means_df = pd.DataFrame(
+        means,
+        columns=df.columns[:-1]
+    )
+
+    st.dataframe(
+        means_df,
+        use_container_width=True
+    )
+
+# ----------------------------------
+# ANALYTICS
+# ----------------------------------
+
+with tab3:
+
+    cluster_df = (
         df["Cluster"]
         .value_counts()
         .reset_index()
     )
 
-    counts.columns = [
+    cluster_df.columns = [
         "Cluster",
         "Count"
     ]
 
     pie = px.pie(
-        counts,
+        cluster_df,
         names="Cluster",
         values="Count",
-        hole=0.5
+        hole=0.5,
+        title="Cluster Distribution"
+    )
+
+    pie.update_layout(
+        template="plotly_white"
     )
 
     st.plotly_chart(
@@ -233,17 +230,30 @@ with tab3:
         use_container_width=True
     )
 
-# ---------------------------------
+    st.subheader(
+        "Cluster Membership Probabilities"
+    )
+
+    prob_df = pd.DataFrame(
+        probabilities[:10]
+    )
+
+    st.dataframe(
+        prob_df,
+        use_container_width=True
+    )
+
+# ----------------------------------
 # EXPORT
-# ---------------------------------
+# ----------------------------------
 
 with tab4:
 
     csv = df.to_csv(index=False)
 
     st.download_button(
-        "📥 Download Dataset",
+        "📥 Download Clustered Dataset",
         csv,
-        "hierarchical_clusters.csv",
+        "gmm_clusters.csv",
         "text/csv"
     )
