@@ -3,24 +3,22 @@ import pandas as pd
 import plotly.express as px
 
 from sklearn.datasets import load_iris
-from scipy.cluster.hierarchy import linkage, dendrogram
-import matplotlib.pyplot as plt
 
-from models.hierarchical import HierarchicalClustering
+from models.dbscan import DBSCANClustering
 
-# ---------------------------------
+# ---------------------------------------
 # PAGE CONFIG
-# ---------------------------------
+# ---------------------------------------
 
 st.set_page_config(
-    page_title="Hierarchical Clustering Dashboard",
-    page_icon="🌳",
+    page_title="DBSCAN Dashboard",
+    page_icon="🔍",
     layout="wide"
 )
 
-# ---------------------------------
+# ---------------------------------------
 # CSS
-# ---------------------------------
+# ---------------------------------------
 
 st.markdown("""
 <style>
@@ -60,24 +58,25 @@ background:#eff6ff;
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------
+# ---------------------------------------
 # HEADER
-# ---------------------------------
+# ---------------------------------------
 
 st.markdown("""
 <div class='main-title'>
-🌳 Hierarchical Clustering Dashboard
+🔍 DBSCAN Clustering Dashboard
 </div>
+
 <div class='sub-title'>
-Agglomerative Clustering on Iris Dataset
+Density Based Clustering using Iris Dataset
 </div>
 """, unsafe_allow_html=True)
 
 st.divider()
 
-# ---------------------------------
-# LOAD DATA
-# ---------------------------------
+# ---------------------------------------
+# DATASET
+# ---------------------------------------
 
 iris = load_iris()
 
@@ -86,62 +85,73 @@ df = pd.DataFrame(
     columns=iris.feature_names
 )
 
-# ---------------------------------
+# ---------------------------------------
 # SIDEBAR
-# ---------------------------------
+# ---------------------------------------
 
 st.sidebar.title("⚙ Settings")
 
-clusters = st.sidebar.slider(
-    "Number of Clusters",
-    2,
-    10,
-    3
+eps = st.sidebar.slider(
+    "EPS",
+    min_value=0.1,
+    max_value=2.0,
+    value=0.5
 )
 
-# ---------------------------------
-# MODEL
-# ---------------------------------
+min_samples = st.sidebar.slider(
+    "Min Samples",
+    min_value=2,
+    max_value=20,
+    value=5
+)
 
-model = HierarchicalClustering(clusters)
+# ---------------------------------------
+# MODEL
+# ---------------------------------------
+
+model = DBSCANClustering(
+    eps=eps,
+    min_samples=min_samples
+)
 
 result = model.fit(df)
 
 X = result["X_scaled"]
 labels = result["labels"]
-score = result["score"]
 
 df["Cluster"] = labels
 
-# ---------------------------------
-# KPI
-# ---------------------------------
+# ---------------------------------------
+# KPIs
+# ---------------------------------------
+
+cluster_count = len(set(labels))
+
+noise_points = list(labels).count(-1)
 
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("Flowers", len(df))
 c2.metric("Features", 4)
-c3.metric("Clusters", clusters)
-c4.metric("Silhouette", round(score,3))
+c3.metric("Clusters Found", cluster_count)
+c4.metric("Noise Points", noise_points)
 
 st.divider()
 
-# ---------------------------------
+# ---------------------------------------
 # TABS
-# ---------------------------------
+# ---------------------------------------
 
-tab1, tab2, tab3, tab4 = st.tabs(
-[
-"Dataset",
-"Dendrogram",
-"Clusters",
-"Export"
-]
-)
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Dataset",
+    "Clusters",
+    "Analytics",
+    "Export"
+])
 
-# ---------------------------------
+# ---------------------------------------
 # DATASET
-# ---------------------------------
+# ---------------------------------------
 
 with tab1:
 
@@ -159,43 +169,17 @@ with tab1:
         use_container_width=True
     )
 
-# ---------------------------------
-# DENDROGRAM
-# ---------------------------------
+# ---------------------------------------
+# CLUSTERS
+# ---------------------------------------
 
 with tab2:
-
-    st.subheader("Hierarchical Dendrogram")
-
-    fig, ax = plt.subplots(
-        figsize=(10,5)
-    )
-
-    linked = linkage(
-        X,
-        method='ward'
-    )
-
-    dendrogram(
-        linked,
-        ax=ax
-    )
-
-    plt.title("Dendrogram")
-
-    st.pyplot(fig)
-
-# ---------------------------------
-# CLUSTERS
-# ---------------------------------
-
-with tab3:
 
     fig = px.scatter(
         x=X[:,0],
         y=X[:,1],
         color=labels.astype(str),
-        title="Cluster Visualization",
+        title="DBSCAN Cluster Visualization",
         color_discrete_sequence=
         px.colors.qualitative.Bold
     )
@@ -210,22 +194,33 @@ with tab3:
         use_container_width=True
     )
 
-    counts = (
-        df["Cluster"]
+# ---------------------------------------
+# ANALYTICS
+# ---------------------------------------
+
+with tab3:
+
+    cluster_df = (
+        pd.Series(labels)
         .value_counts()
         .reset_index()
     )
 
-    counts.columns = [
+    cluster_df.columns = [
         "Cluster",
         "Count"
     ]
 
     pie = px.pie(
-        counts,
-        names="Cluster",
+        cluster_df,
         values="Count",
-        hole=0.5
+        names="Cluster",
+        hole=0.5,
+        title="Cluster Distribution"
+    )
+
+    pie.update_layout(
+        template="plotly_white"
     )
 
     st.plotly_chart(
@@ -233,17 +228,34 @@ with tab3:
         use_container_width=True
     )
 
-# ---------------------------------
+    bar = px.bar(
+        cluster_df,
+        x="Cluster",
+        y="Count",
+        color="Cluster",
+        title="Cluster Sizes"
+    )
+
+    bar.update_layout(
+        template="plotly_white"
+    )
+
+    st.plotly_chart(
+        bar,
+        use_container_width=True
+    )
+
+# ---------------------------------------
 # EXPORT
-# ---------------------------------
+# ---------------------------------------
 
 with tab4:
 
     csv = df.to_csv(index=False)
 
     st.download_button(
-        "📥 Download Dataset",
+        "📥 Download Clustered Dataset",
         csv,
-        "hierarchical_clusters.csv",
+        "dbscan_clusters.csv",
         "text/csv"
     )
