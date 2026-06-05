@@ -4,21 +4,21 @@ import plotly.express as px
 
 from sklearn.datasets import load_iris
 
-from models.dbscan import DBSCANClustering
+from models.tsne_model import TSNEModel
 
-# ---------------------------------------
+# ----------------------------------
 # PAGE CONFIG
-# ---------------------------------------
+# ----------------------------------
 
 st.set_page_config(
-    page_title="DBSCAN Dashboard",
-    page_icon="🔍",
+    page_title="t-SNE Dashboard",
+    page_icon="🧠",
     layout="wide"
 )
 
-# ---------------------------------------
+# ----------------------------------
 # CSS
-# ---------------------------------------
+# ----------------------------------
 
 st.markdown("""
 <style>
@@ -58,25 +58,25 @@ background:#eff6ff;
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------
+# ----------------------------------
 # HEADER
-# ---------------------------------------
+# ----------------------------------
 
 st.markdown("""
 <div class='main-title'>
-🔍 DBSCAN Clustering Dashboard
+🧠 t-SNE Dashboard
 </div>
 
 <div class='sub-title'>
-Density Based Clustering using Iris Dataset
+t-Distributed Stochastic Neighbor Embedding
 </div>
 """, unsafe_allow_html=True)
 
 st.divider()
 
-# ---------------------------------------
+# ----------------------------------
 # DATASET
-# ---------------------------------------
+# ----------------------------------
 
 iris = load_iris()
 
@@ -85,103 +85,90 @@ df = pd.DataFrame(
     columns=iris.feature_names
 )
 
-# ---------------------------------------
+# ----------------------------------
 # SIDEBAR
-# ---------------------------------------
+# ----------------------------------
 
 st.sidebar.title("⚙ Settings")
 
-eps = st.sidebar.slider(
-    "EPS",
-    min_value=0.1,
-    max_value=2.0,
-    value=0.5
+perplexity = st.sidebar.slider(
+    "Perplexity",
+    min_value=5,
+    max_value=50,
+    value=30
 )
 
-min_samples = st.sidebar.slider(
-    "Min Samples",
-    min_value=2,
-    max_value=20,
-    value=5
-)
-
-# ---------------------------------------
+# ----------------------------------
 # MODEL
-# ---------------------------------------
+# ----------------------------------
 
-model = DBSCANClustering(
-    eps=eps,
-    min_samples=min_samples
+model = TSNEModel(
+    perplexity=perplexity
 )
 
 result = model.fit(df)
 
-X = result["X_scaled"]
-labels = result["labels"]
+embedding = result["embedding"]
 
-df["Cluster"] = labels
+# ----------------------------------
+# KPI
+# ----------------------------------
 
-# ---------------------------------------
-# KPIs
-# ---------------------------------------
+c1, c2, c3 = st.columns(3)
 
-cluster_count = len(set(labels))
-
-noise_points = list(labels).count(-1)
-
-c1, c2, c3, c4 = st.columns(4)
-
-c1.metric("Flowers", len(df))
+c1.metric("Samples", len(df))
 c2.metric("Features", 4)
-c3.metric("Clusters Found", cluster_count)
-c4.metric("Noise Points", noise_points)
+c3.metric("Perplexity", perplexity)
 
 st.divider()
 
-# ---------------------------------------
+# ----------------------------------
 # TABS
-# ---------------------------------------
+# ----------------------------------
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Dataset",
-    "Clusters",
-    "Analytics",
-    "Export"
-])
+tab1, tab2, tab3, tab4 = st.tabs(
+[
+"Dataset",
+"t-SNE Visualization",
+"Analytics",
+"Export"
+]
+)
 
-# ---------------------------------------
+# ----------------------------------
 # DATASET
-# ---------------------------------------
+# ----------------------------------
 
 with tab1:
 
-    st.subheader("Dataset Preview")
-
     st.dataframe(
-        df.head(15),
+        df.head(),
         use_container_width=True
     )
-
-    st.subheader("Statistics")
 
     st.dataframe(
         df.describe(),
         use_container_width=True
     )
 
-# ---------------------------------------
-# CLUSTERS
-# ---------------------------------------
+# ----------------------------------
+# VISUALIZATION
+# ----------------------------------
 
 with tab2:
 
+    tsne_df = pd.DataFrame(
+        embedding,
+        columns=["Dim1","Dim2"]
+    )
+
     fig = px.scatter(
-        x=X[:,0],
-        y=X[:,1],
-        color=labels.astype(str),
-        title="DBSCAN Cluster Visualization",
-        color_discrete_sequence=
-        px.colors.qualitative.Bold
+        tsne_df,
+        x="Dim1",
+        y="Dim2",
+        color="Dim1",
+        title="t-SNE Projection",
+        color_continuous_scale="plasma"
     )
 
     fig.update_layout(
@@ -194,68 +181,34 @@ with tab2:
         use_container_width=True
     )
 
-# ---------------------------------------
+# ----------------------------------
 # ANALYTICS
-# ---------------------------------------
+# ----------------------------------
 
 with tab3:
 
-    cluster_df = (
-        pd.Series(labels)
-        .value_counts()
-        .reset_index()
+    st.subheader(
+        "Embedded Dataset"
     )
 
-    cluster_df.columns = [
-        "Cluster",
-        "Count"
-    ]
-
-    pie = px.pie(
-        cluster_df,
-        values="Count",
-        names="Cluster",
-        hole=0.5,
-        title="Cluster Distribution"
-    )
-
-    pie.update_layout(
-        template="plotly_white"
-    )
-
-    st.plotly_chart(
-        pie,
+    st.dataframe(
+        tsne_df.head(20),
         use_container_width=True
     )
 
-    bar = px.bar(
-        cluster_df,
-        x="Cluster",
-        y="Count",
-        color="Cluster",
-        title="Cluster Sizes"
-    )
-
-    bar.update_layout(
-        template="plotly_white"
-    )
-
-    st.plotly_chart(
-        bar,
-        use_container_width=True
-    )
-
-# ---------------------------------------
+# ----------------------------------
 # EXPORT
-# ---------------------------------------
+# ----------------------------------
 
 with tab4:
 
-    csv = df.to_csv(index=False)
+    csv = tsne_df.to_csv(
+        index=False
+    )
 
     st.download_button(
-        "📥 Download Clustered Dataset",
+        "📥 Download t-SNE Dataset",
         csv,
-        "dbscan_clusters.csv",
+        "tsne_output.csv",
         "text/csv"
     )
